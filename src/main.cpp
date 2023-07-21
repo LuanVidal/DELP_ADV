@@ -3,8 +3,8 @@
 #include <ESP8266HTTPClient.h>
 #include <TimeLib.h>
 
-const char* SSID = "DELP_IOT";
-const char* PASSWORD = "2023f4ff7872c2";
+const char* SSID = "EGR-FIBRA_2.4G-ROSEMEIRE";
+const char* PASSWORD = "11151821";
 
 WiFiClient wifiClient;
 PubSubClient MQTT(wifiClient);
