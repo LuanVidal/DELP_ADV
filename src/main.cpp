@@ -123,49 +123,49 @@ void loop() {
       
       if (acao == 2) // login
       {
-        const char* endpoint = "http://localhost:3009/delp/arduino/login";
+        const char* endpoint = "http://ec2-34-224-25-118.compute-1.amazonaws.com:3009/delp/arduino/login";
         String requestBody = "{\"matricula\":\"" + matricula + "\",\"mac\":\"" + mac + "\"}";
         fazerRequisicaoHTTP(endpoint, requestBody.c_str());
       }
 
       if (acao == 3) // logout
       { 
-        const char* endpoint = "http://localhost:3009/delp/arduino/logout";
+        const char* endpoint = "http://ec2-34-224-25-118.compute-1.amazonaws.com:3009/delp/arduino/logout";
         String requestBody = "{\"mac\":\"" + mac + "\"}";
         fazerRequisicaoHTTP(endpoint, requestBody.c_str());
       }
 
       if (acao == 4) // INICIO PROCESSO MÁQUINA
       {
-        const char* endpoint = "http://localhost:3009/delp/arduino/inicioProcesso";
+        const char* endpoint = "http://ec2-34-224-25-118.compute-1.amazonaws.com:3009/delp/arduino/inicioProcesso";
         String requestBody = "{\"matricula\":\"" + matricula + "\",\"mac\":\"" + mac + "\",\"ordemProducao\":" + String(ordemProducao) + ",\"atividade\":" + String(atividade) + ",\"material\":" + String(material) + "}";
         fazerRequisicaoHTTP(endpoint, requestBody.c_str());
       }
 
       if (acao == 5)  //TERMINO PROCESSO MÁQUINA
       {
-        const char* endpoint = "http://localhost:3009/delp/arduino/terminoProcesso";
+        const char* endpoint = "http://ec2-34-224-25-118.compute-1.amazonaws.com:3009/delp/arduino/terminoProcesso";
         String requestBody = "{\"matricula\":\"" + matricula + "\",\"mac\":\"" + mac + "\",\"ordemProducao\":" + String(ordemProducao) + ",\"atividade\":" + String(atividade) + ",\"material\":" + String(material) + "}";
         fazerRequisicaoHTTP(endpoint, requestBody.c_str());
       }
 
       if (acao == 6) //BUSCA ORDENS MÁQUINA
       { 
-        const char* endpoint = "http://localhost:3009/delp/arduino/buscaOrdens";
+        const char* endpoint = "http://ec2-34-224-25-118.compute-1.amazonaws.com:3009/delp/arduino/buscaOrdens";
         String requestBody = "{\"mac\":\"" + mac + "\"}";
         fazerRequisicaoHTTP(endpoint, requestBody.c_str());
       }
 
-      if (acao == 7) //BUSCA ORDENS MÁQUINA
+      if (acao == 7) //BUSCA busca Atividades
       { 
-        const char* endpoint = "http://localhost:3009/delp/arduino/buscaAtividades";
+        const char* endpoint = "http://ec2-34-224-25-118.compute-1.amazonaws.com:3009/delp/arduino/buscaAtividades";
         String requestBody = "{\"mac\":\"" + mac + "\"}";
         fazerRequisicaoHTTP(endpoint, requestBody.c_str());
       }
       
-      if (acao == 8) //BUSCA ORDENS MÁQUINA
+      if (acao == 8) //Busca Materiais
       { 
-        const char* endpoint = "http://localhost:3009/delp/arduino/buscaMateriais";
+        const char* endpoint = "http://ec2-34-224-25-118.compute-1.amazonaws.com:3009/delp/arduino/buscaMateriais";
         String requestBody = "{\"mac\":\"" + mac + "\"}";
         fazerRequisicaoHTTP(endpoint, requestBody.c_str());
       }
