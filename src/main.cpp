@@ -41,9 +41,17 @@ void fazerRequisicaoHTTP(const char* endpoint, const char* requestBody) {
     String response = http.getString();
     // Processar a resposta recebida
     Serial.println(response);
-  } else {
-    Serial.print("Erro na requisição HTTP: ");
-    Serial.println(httpResponseCode);
+  } 
+
+  if (httpResponseCode != 200) {
+    // Handle error responses
+    if (httpResponseCode == 401) {
+      String errorMessage = http.getString();
+      Serial.print(errorMessage);
+
+    } else {
+      Serial.println("HTTP request error: " + String(httpResponseCode));
+    }
   }
 
   http.end();
@@ -88,12 +96,13 @@ void loop() {
       enviaValores(tensao, corrente);
     }
 
-    if (mensagem.startsWith("Ação:")) {
+    if (mensagem.startsWith("Acao:")) {
       int posicaoInicio = mensagem.indexOf(":") + 2;
       int posicaoFim = mensagem.indexOf(",");
       String acaoStr = mensagem.substring(posicaoInicio, posicaoFim);
       int acao = acaoStr.toInt();
 
+      Serial.println(mensagem);  
       posicaoInicio = mensagem.indexOf("\"matricula\": \"") + 14;
       posicaoFim = mensagem.indexOf("\"", posicaoInicio);
       String matricula = mensagem.substring(posicaoInicio, posicaoFim);
@@ -215,16 +224,16 @@ void conectaMQTT() {
 }
 
 void enviaValores(float tensao, float corrente) {
-
-  epochTime = getTime();
+  unsigned long epochTime = getTime(); // 
+  double epochTimeMs = epochTime + (millis() % 1000) / 1000.0; // Adicionando milissegundos ao timestamp
 
   char mqttMessageTensao[200];
-  sprintf(mqttMessageTensao, "{\"id_variavel\": %d, \"valor\": %.2f, \"data_hora\": %ld}", 29, tensao, epochTime);
+  sprintf(mqttMessageTensao, "{\"id_variavel\": %d, \"valor\": %.2f, \"data_hora\": %.3f}", 30, tensao, epochTimeMs); // Usando %.3f para incluir milissegundos
 
   char mqttMessageCorrente[200];
-  sprintf(mqttMessageCorrente, "{\"id_variavel\": %d, \"valor\": %.2f, \"data_hora\": %ld}", 28, corrente, epochTime);
+  sprintf(mqttMessageCorrente, "{\"id_variavel\": %d, \"valor\": %.2f, \"data_hora\": %.3f}", 31, corrente, epochTimeMs); // Usando %.3f para incluir milissegundos
 
   MQTT.publish(TOPIC_PUBLISH, mqttMessageTensao);
   MQTT.publish(TOPIC_PUBLISH, mqttMessageCorrente);
-  delay(500);
+  delay(200);
 }
