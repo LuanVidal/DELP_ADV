@@ -331,6 +331,7 @@ void loop() {
       beep();
       exibirTela(2);
 
+      mensagemDeErroRecebida = "";
       matricula = 0;
       ordemProducao = 0;
       atividade = 0;
@@ -347,6 +348,7 @@ void loop() {
       beep();
       exibirTela(4);
 
+      mensagemDeErroRecebida = "";
       matricula = 0;
       ordemProducao = 0;
       atividade = 0;
@@ -363,6 +365,7 @@ void loop() {
       beep();
       exibirTela(6);
 
+      mensagemDeErroRecebida = "";
       matricula = 0;
       ordemProducao = 0;
       atividade = 0;
@@ -379,6 +382,7 @@ void loop() {
       beep();
       exibirTela(6);
 
+      mensagemDeErroRecebida = "";
       matricula = 0;
       ordemProducao = 0;
       atividade = 0;
@@ -513,12 +517,12 @@ void loop() {
           if (endIndex != -1) {
             // Extract the error message from the received message
             mensagemDeErroRecebida = message.substring(startIndex + 10, endIndex);
-            Serial.println("Received error from ESP8266: " + mensagemDeErroRecebida);
+            Serial.println("ERRO_ESP: " + mensagemDeErroRecebida);
             // Perform actions based on the error, such as displaying on the screen or taking other measures
           }
         } else {
           // Print the received message for debugging
-          Serial.println("Received message: " + message);
+          Serial.println("MENSAGEM: " + message);
         }
       }
     }
