@@ -1,12 +1,23 @@
+/*
+  ||        //  PROJETO DELP - CONECTION ESP  \\         ||
+
+  ---------------------- PENDENCIAS -----------------------
+
+  [ ] - Corrigir erro a verificação de SLL, estabelecida pelo protocolo HTTPS 
+
+*/
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <ESP8266HTTPClient.h>
+#include <WiFiClientSecureBearSSL.h>
 #include <TimeLib.h>
 
 const char* SSID = "TCS_2G";
 const char* PASSWORD = "33331999";
 
-WiFiClient wifiClient;
+String mac = "D8:BF:C0:4:99:F4";
+
+BearSSL::WiFiClientSecure wifiClient;
 PubSubClient MQTT(wifiClient);
 
 //server ntp configuração
@@ -31,27 +42,61 @@ void conectaMQTT();
 void enviaValores(float tensao, float corrente);
 
 void fazerRequisicaoHTTP(const char* endpoint, const char* requestBody) {
+  
+  Serial.println("Iniciando requisicao HTTP...");
+
+  if (WiFi.status() != WL_CONNECTED) {
+       Serial.println("WiFi nao conectado!");
+       return;
+  }
+
+  wifiClient.setInsecure();
+
+  Serial.print("Endpoint: ");
+  Serial.println(endpoint);
+  Serial.print("Request body: ");
+  Serial.println(requestBody);
 
   HTTPClient http;
-  http.begin(wifiClient, endpoint);
+
+
+  http.setTimeout(10000);
+
+  Serial.println("Tentando iniciar conexao HTTP...");
+  if (!http.begin(wifiClient, endpoint)) {
+    Serial.println("Falha ao iniciar a conexao HTTP.");
+    return;
+  }
+
   http.addHeader("Content-Type", "application/json");
 
+  Serial.println("Tentando fazer POST...");
   int httpResponseCode = http.POST(requestBody);
-  if (httpResponseCode == 200) {
-    String response = http.getString();
-    // Processar a resposta recebida
-    Serial.println(response);
-  } 
 
-  if (httpResponseCode != 200) {
-    // Handle error responses
-    if (httpResponseCode == 401) {
-      String errorMessage = http.getString();
-      Serial.print(errorMessage);
+  Serial.print("Resposta HTTP recebida. Codigo: ");
+  Serial.println(httpResponseCode);
 
-    } else {
-      Serial.println("HTTP request error: " + String(httpResponseCode));
-    }
+  String response = http.getString();
+
+  switch (httpResponseCode) {
+    case 200:
+      Serial.println("Requisicao bem sucedida:");
+      Serial.println(response);
+      break;
+
+    case 401:
+      Serial.println(response);
+      break;
+
+    case -11:
+      Serial.println("Erro de timeout na requisicao HTTP.");
+      break;
+
+    default:
+      Serial.print("Erro na requisicao HTTP. Codigo: ");
+      Serial.println(httpResponseCode);
+      Serial.println(response);
+      break;
   }
 
   http.end();
@@ -109,7 +154,7 @@ void loop() {
 
       posicaoInicio = mensagem.indexOf("\"mac\": \"") + 8;
       posicaoFim = mensagem.indexOf("\"", posicaoInicio);
-      String mac = "D8:BF:C0:4:99:F4";
+      
 
       posicaoInicio = mensagem.indexOf("\"ordemProducao\":") + 16;
       posicaoFim = mensagem.indexOf(",", posicaoInicio);
@@ -125,56 +170,56 @@ void loop() {
 
       if (acao == 1) // status
       {
-        const char* endpoint = "http://ec2-34-224-25-118.compute-1.amazonaws.com:3009/delp/arduino/status";
+        const char* endpoint = "https://delp.tcsapp.com.br:443/delp/arduino/status";
         String requestBody = "{\"mac\":\"" + mac + "\"}";
         fazerRequisicaoHTTP(endpoint, requestBody.c_str());
       }
       
       if (acao == 2) // login
       {
-        const char* endpoint = "http://ec2-34-224-25-118.compute-1.amazonaws.com:3009/delp/arduino/login";
+        const char* endpoint = "https://delp.tcsapp.com.br/delp/arduino/login";
         String requestBody = "{\"matricula\":\"" + matricula + "\",\"mac\":\"" + mac + "\"}";
         fazerRequisicaoHTTP(endpoint, requestBody.c_str());
       }
 
       if (acao == 3) // logout
       { 
-        const char* endpoint = "http://ec2-34-224-25-118.compute-1.amazonaws.com:3009/delp/arduino/logout";
+        const char* endpoint = "https://delp.tcsapp.com.br/delp/arduino/logout";
         String requestBody = "{\"mac\":\"" + mac + "\"}";
         fazerRequisicaoHTTP(endpoint, requestBody.c_str());
       }
 
       if (acao == 4) // INICIO PROCESSO MÁQUINA
       {
-        const char* endpoint = "http://ec2-34-224-25-118.compute-1.amazonaws.com:3009/delp/arduino/inicioProcesso";
+        const char* endpoint = "https://delp.tcsapp.com.br/delp/arduino/inicioProcesso";
         String requestBody = "{\"matricula\":\"" + matricula + "\",\"mac\":\"" + mac + "\",\"ordemProducao\":" + String(ordemProducao) + ",\"atividade\":" + String(atividade) + ",\"material\":" + String(material) + "}";
         fazerRequisicaoHTTP(endpoint, requestBody.c_str());
       }
 
       if (acao == 5)  //TERMINO PROCESSO MÁQUINA
       {
-        const char* endpoint = "http://ec2-34-224-25-118.compute-1.amazonaws.com:3009/delp/arduino/terminoProcesso";
+        const char* endpoint = "https://delp.tcsapp.com.br/delp/arduino/terminoProcesso";
         String requestBody = "{\"matricula\":\"" + matricula + "\",\"mac\":\"" + mac + "\",\"ordemProducao\":" + String(ordemProducao) + ",\"atividade\":" + String(atividade) + ",\"material\":" + String(material) + "}";
         fazerRequisicaoHTTP(endpoint, requestBody.c_str());
       }
 
       if (acao == 6) //BUSCA ORDENS MÁQUINA
       { 
-        const char* endpoint = "http://ec2-34-224-25-118.compute-1.amazonaws.com:3009/delp/arduino/buscaOrdens";
+        const char* endpoint = "https://delp.tcsapp.com.br/delp/arduino/buscaOrdens";
         String requestBody = "{\"mac\":\"" + mac + "\"}";
         fazerRequisicaoHTTP(endpoint, requestBody.c_str());
       }
 
       if (acao == 7) //BUSCA busca Atividades
       { 
-        const char* endpoint = "http://ec2-34-224-25-118.compute-1.amazonaws.com:3009/delp/arduino/buscaAtividades";
+        const char* endpoint = "https://delp.tcsapp.com.br/delp/arduino/buscaAtividades";
         String requestBody = "{\"mac\":\"" + mac + "\"}";
         fazerRequisicaoHTTP(endpoint, requestBody.c_str());
       }
       
       if (acao == 8) //Busca Materiais
       { 
-        const char* endpoint = "http://ec2-34-224-25-118.compute-1.amazonaws.com:3009/delp/arduino/buscaMateriais";
+        const char* endpoint = "https://delp.tcsapp.com.br/delp/arduino/buscaMateriais";
         String requestBody = "{\"mac\":\"" + mac + "\"}";
         fazerRequisicaoHTTP(endpoint, requestBody.c_str());
       }
@@ -214,7 +259,7 @@ void conectaMQTT() {
     Serial.print("Conectando ao Broker MQTT: ");
     Serial.println(BROKER_MQTT);
     if (MQTT.connect(ID_MQTT)) {
-      Serial.println("Conectado ao Broker com sucesso!");
+      Serial.println("\nConectado ao Broker com sucesso!");
     } else {
       Serial.println("Nao foi possivel se conectar ao broker.");
       Serial.println("Nova tentativa de conexao em 5s");
