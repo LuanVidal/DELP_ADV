@@ -1,30 +1,42 @@
 /*
   ||        //  PROJETO DELP - CONECTION ESP  \\         ||
 
-  ---------------------- PENDENCIAS -----------------------
-
-  [ ] - Corrigir erro a verificação de SLL, estabelecida pelo protocolo HTTPS 
-
 */
 #include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 #include <ESP8266HTTPClient.h>
-#include <WiFiClientSecureBearSSL.h>
 #include <TimeLib.h>
 
-const char* SSID = "TCS_2G";
-const char* PASSWORD = "33331999";
+// ----------- REDE ------------
 
-String mac = "D8:BF:C0:4:99:F4";
+const char* SSID = "RoteadorVivoTCS";
+const char* PASSWORD = "3133331999";
 
-BearSSL::WiFiClientSecure wifiClient;
+//const char* SSID = "DELP_IOT";
+//const char* PASSWORD = "2023f4ff7872c2";
+
+//const char* SSID = "TCS_2G";
+//const char* PASSWORD = "33331999";
+
+WiFiClient wifiClient;
+
+// ---------- BUFFER -------------
+#define BUFFER_SIZE 50
+char buffer[BUFFER_SIZE][200];
+int bufferIndex = 0;
+
+// ---------- CONEXÃO (SERVIDOR - BROKER - NTP)
+String mac;
+const char* endpoint_host = "delp.tcsapp.com.br";
+const uint16_t endpoint_port = 443;
+
 PubSubClient MQTT(wifiClient);
 
 //server ntp configuração
 const char* ntpServer = "pool.ntp.org";
 unsigned long epochTime; 
 
-const char* BROKER_MQTT = "ec2-34-224-25-118.compute-1.amazonaws.com";
+const char* BROKER_MQTT = "54.235.29.216";
 const char* mqttUser = "Vn1zj0dwxiX9CmBM";
 const char* mqttPassword = "ld39C62kLj0Jv9VIxsmdnm257i45pP6H";
 const int BROKER_PORT = 1883;
@@ -41,8 +53,16 @@ void conectaWiFi();
 void conectaMQTT();
 void enviaValores(float tensao, float corrente);
 
-void fazerRequisicaoHTTP(const char* endpoint, const char* requestBody) {
+void fazerRequisicaoHTTP(const char* host, uint16_t port, const char* uri, const char* requestBody) {
   
+  HTTPClient http;
+  WiFiClientSecure client;
+
+  client.setInsecure();
+
+  const unsigned long connectionTimeout = 30000; // 30 segundos
+  unsigned long startTime = millis();
+
   Serial.println("Iniciando requisicao HTTP...");
 
   if (WiFi.status() != WL_CONNECTED) {
@@ -50,23 +70,25 @@ void fazerRequisicaoHTTP(const char* endpoint, const char* requestBody) {
        return;
   }
 
-  wifiClient.setInsecure();
 
   Serial.print("Endpoint: ");
-  Serial.println(endpoint);
+  Serial.println(uri);
   Serial.print("Request body: ");
   Serial.println(requestBody);
 
-  HTTPClient http;
-
-
-  http.setTimeout(10000);
 
   Serial.println("Tentando iniciar conexao HTTP...");
-  if (!http.begin(wifiClient, endpoint)) {
-    Serial.println("Falha ao iniciar a conexao HTTP.");
-    return;
+   while (!client.connect(host, port)) {
+    if (millis() - startTime >= connectionTimeout) {
+      Serial.println("Timeout de conexão atingido.");
+      return;
+    }
+    Serial.println("Tentando conectar novamente em 1 segundo...");
+    delay(1000);
   }
+
+  Serial.println("Conexão estabelecida!");
+  http.begin(client, host, port, uri);
 
   http.addHeader("Content-Type", "application/json");
 
@@ -100,6 +122,7 @@ void fazerRequisicaoHTTP(const char* endpoint, const char* requestBody) {
   }
 
   http.end();
+  client.stop();
 }
 
 unsigned long getTime() {
@@ -170,58 +193,58 @@ void loop() {
 
       if (acao == 1) // status
       {
-        const char* endpoint = "https://delp.tcsapp.com.br:443/delp/arduino/status";
+        const char* endpoint = "/delp/arduino/status";
         String requestBody = "{\"mac\":\"" + mac + "\"}";
-        fazerRequisicaoHTTP(endpoint, requestBody.c_str());
+        fazerRequisicaoHTTP(endpoint_host, endpoint_port, endpoint, requestBody.c_str());
       }
       
       if (acao == 2) // login
       {
-        const char* endpoint = "https://delp.tcsapp.com.br/delp/arduino/login";
+        const char* endpoint = "/delp/arduino/login";
         String requestBody = "{\"matricula\":\"" + matricula + "\",\"mac\":\"" + mac + "\"}";
-        fazerRequisicaoHTTP(endpoint, requestBody.c_str());
+        fazerRequisicaoHTTP(endpoint_host, endpoint_port, endpoint, requestBody.c_str());
       }
 
       if (acao == 3) // logout
       { 
-        const char* endpoint = "https://delp.tcsapp.com.br/delp/arduino/logout";
+        const char* endpoint = "/delp/arduino/logout";
         String requestBody = "{\"mac\":\"" + mac + "\"}";
-        fazerRequisicaoHTTP(endpoint, requestBody.c_str());
+        fazerRequisicaoHTTP(endpoint_host, endpoint_port, endpoint, requestBody.c_str());
       }
 
       if (acao == 4) // INICIO PROCESSO MÁQUINA
       {
-        const char* endpoint = "https://delp.tcsapp.com.br/delp/arduino/inicioProcesso";
+        const char* endpoint = "/delp/arduino/inicioProcesso";
         String requestBody = "{\"matricula\":\"" + matricula + "\",\"mac\":\"" + mac + "\",\"ordemProducao\":" + String(ordemProducao) + ",\"atividade\":" + String(atividade) + ",\"material\":" + String(material) + "}";
-        fazerRequisicaoHTTP(endpoint, requestBody.c_str());
+        fazerRequisicaoHTTP(endpoint_host, endpoint_port, endpoint, requestBody.c_str());
       }
 
       if (acao == 5)  //TERMINO PROCESSO MÁQUINA
       {
-        const char* endpoint = "https://delp.tcsapp.com.br/delp/arduino/terminoProcesso";
+        const char* endpoint = "/delp/arduino/terminoProcesso";
         String requestBody = "{\"matricula\":\"" + matricula + "\",\"mac\":\"" + mac + "\",\"ordemProducao\":" + String(ordemProducao) + ",\"atividade\":" + String(atividade) + ",\"material\":" + String(material) + "}";
-        fazerRequisicaoHTTP(endpoint, requestBody.c_str());
+        fazerRequisicaoHTTP(endpoint_host, endpoint_port, endpoint, requestBody.c_str());
       }
 
       if (acao == 6) //BUSCA ORDENS MÁQUINA
       { 
-        const char* endpoint = "https://delp.tcsapp.com.br/delp/arduino/buscaOrdens";
+        const char* endpoint = "/delp/arduino/buscaOrdens";
         String requestBody = "{\"mac\":\"" + mac + "\"}";
-        fazerRequisicaoHTTP(endpoint, requestBody.c_str());
+        fazerRequisicaoHTTP(endpoint_host, endpoint_port, endpoint, requestBody.c_str());
       }
 
       if (acao == 7) //BUSCA busca Atividades
       { 
-        const char* endpoint = "https://delp.tcsapp.com.br/delp/arduino/buscaAtividades";
+        const char* endpoint = "/delp/arduino/buscaAtividades";
         String requestBody = "{\"mac\":\"" + mac + "\"}";
-        fazerRequisicaoHTTP(endpoint, requestBody.c_str());
+        fazerRequisicaoHTTP(endpoint_host, endpoint_port, endpoint, requestBody.c_str());
       }
       
       if (acao == 8) //Busca Materiais
       { 
-        const char* endpoint = "https://delp.tcsapp.com.br/delp/arduino/buscaMateriais";
+        const char* endpoint = "/delp/arduino/buscaMateriais";
         String requestBody = "{\"mac\":\"" + mac + "\"}";
-        fazerRequisicaoHTTP(endpoint, requestBody.c_str());
+        fazerRequisicaoHTTP(endpoint_host, endpoint_port, endpoint, requestBody.c_str());
       }
     }
   }
@@ -251,7 +274,8 @@ void conectaWiFi() {
   Serial.print(SSID);
   Serial.println("IP obtido: ");
   Serial.print(WiFi.localIP());
-  String mec = WiFi.macAddress();
+  mac = WiFi.macAddress();
+  Serial.println("MEC: "+ mac);
 }
 
 void conectaMQTT() {
@@ -267,6 +291,11 @@ void conectaMQTT() {
     }
   }
 }
+
+/*
+  Maquina 1: Corrente: 28 | Tensão: 29
+  Maquina 2: Corrente: 31 | Tensão: 30
+*/
 
 void enviaValores(float tensao, float corrente) {
   unsigned long epochTime = getTime(); // 
