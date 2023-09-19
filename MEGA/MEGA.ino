@@ -6,11 +6,12 @@
 // Definição de variáveis globais
 
 static unsigned long lastDebounceTime = 0;
-static unsigned long debounceDelay = 70;
+static unsigned long debounceDelay = 100;
 
 #define FILTRO 0.03 // TAXA DE VARIAÇÃO
 float tensaoAnterior = 0.0;
 float correnteAnterior = 0.0;
+String message;
 
 String mensagemDeErroRecebida = "";
 float correnteMapeada = 0.0;
@@ -19,6 +20,10 @@ float tensaoMapeada = 0.0;
 bool isConnected = false;
 bool aproved = false;
 bool timeout = false;
+bool pausa = false;
+bool restart = false;
+bool erro_pause = false;
+bool erro_reinico = false;
 
 const byte LINHAS = 4; // Número de linhas do teclado matricial
 const byte COLUNAS = 4; // Número de colunas do teclado matricial
@@ -115,8 +120,13 @@ int aux_ordem[7] = {0, 0, 0, 0, 0, 0, 0};
 #define TENSAO1              0x28
 #define CORRENTE1            0x29
 
+#define INICIOH1             0x60
+#define INICIOM1             0x61
+#define INICIOS1             0x62
+
 #define HORA1                0x30
 #define MINUTO1              0x31
+#define SEGUNDO1             0x80
 
 // definição tela rastreabilidade (2)
 #define MATRICULA2           0x32
@@ -131,8 +141,13 @@ int aux_ordem[7] = {0, 0, 0, 0, 0, 0, 0};
 #define TENSAO2              0x36
 #define CORRENTE2            0x37
 
+#define INICIOH2             0x63
+#define INICIOM2             0x64
+#define INICIOS2             0x65
+
 #define HORA2                0x38
 #define MINUTO2              0x39
+#define SEGUNDO2             0x81
 
 // definição tela rastreabilidade (3)
 #define MATRICULA3           0x40
@@ -147,8 +162,13 @@ int aux_ordem[7] = {0, 0, 0, 0, 0, 0, 0};
 #define TENSAO3              0x44
 #define CORRENTE3            0x45
 
+#define INICIOH3             0x66
+#define INICIOM3             0x67
+#define INICIOS3             0x68
+
 #define HORA3                0x46
 #define MINUTO3              0x47
+#define SEGUNDO3             0x82
 
 
 Tela telaAtual = TELA_INICIAL;
@@ -160,17 +180,26 @@ unsigned long lastUpdateTime = 0;
 unsigned long updateTimeInterval = 1000; // Atualiza a cada segundo
 int receivedMinute = 0;
 int receivedHour = 0;
+int receivedSecond = 0;
+
+int hoursInicio = 0;
+int minutesInicio = 0;
+int secondsInicio = 0;
 
 void updateClock() {
   if (millis() - lastUpdateTime >= updateTimeInterval) {
     lastUpdateTime = millis();
     
-    receivedMinute++;
-    if (receivedMinute >= 60) {
-      receivedMinute = 0;
-      receivedHour++;
-      if (receivedHour >= 99) {
-        receivedHour = 0;
+    receivedSecond++;
+    if (receivedSecond >= 60) {
+      receivedSecond = 0;
+      receivedMinute++;
+      if (receivedMinute >= 60) {
+        receivedMinute = 0;
+        receivedHour++;
+        if (receivedHour >= 99) {
+          receivedHour =  99;
+        }
       }
     }
   }
@@ -289,13 +318,14 @@ void loop() {
         escreveTela(MATRICULA, matricula);
       }
       
-    } else if (tecla == '#' && (millis() - lastDebounceTime) > debounceDelay) {
+    } else if (tecla == '#' && (millis() - lastDebounceTime) > debounceDelay && matricula_P2 != 0) {
       // Tecla "#" pressionada: avança para a tela de ordem de produção
       lastDebounceTime = millis();
 
       mensagemDeErroRecebida = "";
       
       beep();
+
       acaoString = "2";
       enviaValores(); // informar a matricula digitada para o servidor (FAZ O LOGIN DO OPERADOR)
 
@@ -348,7 +378,7 @@ void loop() {
         escreveTela(ORDEM_PRODUCAO, ordemProducao);
       }
       
-    } else if (tecla == '#' && (millis() - lastDebounceTime) > debounceDelay) {
+    } else if (tecla == '#' && (millis() - lastDebounceTime) > debounceDelay && ordemProducao_P2 != 0) {
       // Tecla "#" pressionada: avança para a tela de atividade
       lastDebounceTime = millis();
 
@@ -367,7 +397,7 @@ void loop() {
         aux_ordem[i]=0; 
       }
 
-    } else if (tecla == 'A') {
+    } else if (tecla == '*') {
       // Tecla "*" pressionada: volta para a tela anterior
       telaAtual = TELA_MATRICULA;
       matricula = 0;
@@ -395,7 +425,7 @@ void loop() {
         atividade = atividade * 10 + (tecla - '0');
         escreveTela(ATIVIDADE, atividade);
 
-      } else if (tecla == '#' && (millis() - lastDebounceTime) > debounceDelay) {
+      } else if (tecla == '#' && (millis() - lastDebounceTime) > debounceDelay && atividade != 0) {
         // Tecla "#" pressionada: avança para a tela de material
 
         lastDebounceTime = millis();
@@ -439,7 +469,7 @@ void loop() {
         material = material * 10 + (tecla - '0');
         escreveTela(MATERIAL, material);
 
-      } else if (tecla == '#' && (millis() - lastDebounceTime) > debounceDelay) {
+      } else if (tecla == '#' && (millis() - lastDebounceTime) > debounceDelay && material != 0) {
         // Tecla "#" pressionada: envia os valores e avança para a tela de aguarde
         lastDebounceTime = millis();
 
@@ -449,7 +479,7 @@ void loop() {
       } else if (tecla == 'D') {
         // Tecla "D" pressionada: corrige o material
         material = 00; // Zera o valor do material
-        escreveTela(ATIVIDADE, 00);
+        escreveTela(MATERIAL, 00);
 
       } else if (tecla == '*') {
         // Tecla "*" pressionada: volta para a tela anterior
@@ -499,6 +529,11 @@ void loop() {
         beep();
       }
 
+      if (isConnected == false) {
+        telaAtual = ERRO_TIMEOUT;
+        beep();
+      }
+
       if (aproved){
         telaAtual = TELA_RASTREABILIDADE2;
         beep();
@@ -510,32 +545,45 @@ void loop() {
       beep();
       exibirTela(15);
 
-      mensagemDeErroRecebida = "";
-
-      matricula = 0;
-      ordemProducao = 0; // Zera o valor da ordem de produção principal
-      ordemProducao_P2 = 0; // Zera o valor da ordem de produção adicional
-      atividade = 0;
-      material = 0;
-
-      aproved = false;
-
-      ordemProducaoCompleta = "";
-      matriculaCompleta = "";
-
-      delay(3000);
-
-      matricula = 0;
-      matricula_P2 = 0;
-      escreveTela(MATRICULA, 000);
-      escreveTela(MATRICULA_P2, 000);
-
-      for (int i = 4; i >= 0; i--) {
-        aux_matricula[i]=0; 
+      if(erro_pause){
+        delay(3000);
+        telaAtual = TELA_RASTREABILIDADE2;
+        erro_pause = false;
       }
 
-      telaAtual = TELA_MATRICULA;
-      beep();
+      if(erro_reinico){
+        delay(3000);
+        telaAtual = TELA_RASTREABILIDADE3;
+        erro_reinico = false;
+
+      } else {
+        mensagemDeErroRecebida = "";
+
+        matricula = 0;
+        ordemProducao = 0; // Zera o valor da ordem de produção principal
+        ordemProducao_P2 = 0; // Zera o valor da ordem de produção adicional
+        atividade = 0;
+        material = 0;
+
+        aproved = false;
+
+        ordemProducaoCompleta = "";
+        matriculaCompleta = "";
+
+        delay(3000);
+
+        matricula = 0;
+        matricula_P2 = 0;
+        escreveTela(MATRICULA, 000);
+        escreveTela(MATRICULA_P2, 000);
+
+        for (int i = 4; i >= 0; i--) {
+          aux_matricula[i]=0; 
+        }
+
+        telaAtual = TELA_MATRICULA;
+        beep();
+      }
       break;
 
     case ERRO_TELA_MATRICULA:
@@ -669,6 +717,7 @@ void loop() {
       break;   
 
     case TELA_RASTREABILIDADE1:
+
       // Exibir tela de rastreabilidade 1
       exibirTela(10);
       // Ler a entrada do teclado
@@ -684,6 +733,10 @@ void loop() {
 
       escreveTela(TENSAO1, tensaoAnterior);
       escreveTela(CORRENTE1, correnteAnterior);
+
+      escreveTela(INICIOH1, hoursInicio);
+      escreveTela(INICIOM1, minutesInicio);
+      escreveTela(INICIOS1, secondsInicio);
       
       if (tecla == '#' && (millis() - lastDebounceTime) > debounceDelay) {
         // Tecla "#" pressionada: pausa o processo e avança para a tela RASTREABILIDADE2
@@ -711,27 +764,52 @@ void loop() {
 
       escreveTela(TENSAO2, tensaoAnterior);
       escreveTela(CORRENTE2, correnteAnterior);
+
+      escreveTela(INICIOH2, hoursInicio);
+      escreveTela(INICIOM2, minutesInicio);
+      escreveTela(INICIOS2, secondsInicio);
       
       updateClock();
       
       escreveTela(HORA2, receivedHour);
       escreveTela(MINUTO2, receivedMinute);
+      escreveTela(SEGUNDO2, receivedSecond);
 
       
       if (tecla == '#' && (millis() - lastDebounceTime) > debounceDelay) {
         // Tecla "#" pressionada: volta para a tela RASTREABILIDADE1
         lastDebounceTime = millis();
 
-        telaAtual = TELA_RASTREABILIDADE3;
-
         escreveTela(HORA3, receivedHour);
         escreveTela(MINUTO3, receivedMinute);
+        escreveTela(SEGUNDO3, receivedSecond);
+
+        escreveTela(INICIOH3, hoursInicio);
+        escreveTela(INICIOM3, minutesInicio);
+        escreveTela(INICIOS3, secondsInicio);
 
         beep();
 
-      } else if (tecla == 'A') {
+        acaoString = "6";
+        enviaValores();
+
+        if(message.indexOf("Requisicao bem sucedida:") != -1){
+          telaAtual = TELA_RASTREABILIDADE3;
+        }
+
+        if (message.indexOf("Erro de timeout na requisicao HTTP.") != -1) {
+          telaAtual = ERRO_TIMEOUT;
+          erro_pause = true;
+        }
+
+      } else if (tecla == '*') {
+
+        beep();
+
+        acaoString = "6";
+        enviaValores();
+
         telaAtual = TELA_FINALIZAR_PROCESSO;
-        beep();
       }
       break;
 
@@ -751,13 +829,26 @@ void loop() {
 
       escreveTela(TENSAO3, tensaoAnterior);
       escreveTela(CORRENTE3, correnteAnterior);
+
       
       if (tecla == '#' && (millis() - lastDebounceTime) > debounceDelay) {
         // Tecla "#" pressionada: volta para a tela RASTREABILIDADE1
         lastDebounceTime = millis();
 
-        telaAtual = TELA_RASTREABILIDADE2;
         beep();
+
+        acaoString = "7";
+        enviaValores();
+
+        if(message.indexOf("Requisicao bem sucedida:") != -1){
+          telaAtual = telaAtual = TELA_RASTREABILIDADE2;;
+        }
+
+        if (message.indexOf("Erro de timeout na requisicao HTTP.") != -1) {
+          telaAtual = ERRO_TIMEOUT;
+          erro_reinico = true;
+        }
+        
       } else if (tecla == '*') {
       }
       break;
@@ -778,7 +869,7 @@ void loop() {
 
       } else if (tecla == '*') {
         // Tecla "*" pressionada: cancela o finalizar processo e volta para a tela RASTREABILIDADE1
-        telaAtual = TELA_RASTREABILIDADE1;
+        telaAtual = TELA_RASTREABILIDADE3;
       }
       break;
 
@@ -814,7 +905,7 @@ void loop() {
   // recebimento de dados -----------------------------------------------------------
 
   if (Serial3.available()) {
-    String message = Serial3.readStringUntil('\n');
+    message = Serial3.readStringUntil('\n');
       Serial.println(message); // Print para fins de depuração
       
       if (message.startsWith("{\"error\":\"")) {
@@ -837,6 +928,10 @@ void loop() {
       isConnected = true; // Se a mensagem de conexão bem-sucedida for recebida, atualize o status de conexão
     }
 
+    if (message.indexOf("Nao foi possivel se conectar ao broker.") != -1) {
+      isConnected = false;
+    }
+
     if (message.indexOf("Processo Iniciado Sem Erros") != -1) {
       aproved = true;
     }
@@ -845,17 +940,43 @@ void loop() {
       timeout = true;
     }
 
+    if (message.indexOf("Processo Pausado Sem Erros") != -1) {
+      pausa = true;
+    }
+
+    if (message.indexOf("Processo Reiniciado Sem Erros") != -1) {
+      restart = true;
+    }
+
+    int delimiterIndex = message.indexOf('-');
+
+    if (delimiterIndex != -1) {
+        // Separe a string em horas, minutos e segundos
+      String hourString = message.substring(0, delimiterIndex);
+      message.remove(0, delimiterIndex + 1); // Remove a parte da string que já foi processada
+      delimiterIndex = message.indexOf('-');
+        
+      if (delimiterIndex != -1) {
+        String minuteString = message.substring(0, delimiterIndex);
+        String secondString = message.substring(delimiterIndex + 1);
+          
+          // Converta as strings em números inteiros
+        hoursInicio = hourString.toInt() - 3;
+        minutesInicio = minuteString.toInt();
+        secondsInicio = secondString.toInt();
+      }
+    }
+
   }
 
   // envio de dados ----------------------------------------------------------------------
 
-  float tensao = analogRead(A0);
+  float tensao = analogRead(A1);
   float corrente = analogRead(A1);
 
-  tensaoMapeada =  tensao * 0.09765625; // 0 a 100 - 0.0488758553274682
-  correnteMapeada = corrente * 0.5859375; // 0 a 600 - 0.2932551319648094
-
-
+  tensaoMapeada =  tensao * 0.0977517106549365; // 0 a 100 - 0.0488758553274682
+  correnteMapeada = corrente * 0.5865102639296188; // 0 a 600 - 0.2932551319648094
+  
   if (tensaoMapeada <= 100) {
     // Aplicar o filtro com margem de 3%
     if (tensaoAnterior + (100 * FILTRO) < tensaoMapeada || tensaoAnterior - (100 * FILTRO) > tensaoMapeada ) {
@@ -864,8 +985,17 @@ void loop() {
     Serial3.print("Tensao:");
     Serial3.print(tensaoAnterior);
     Serial3.print("V |");
+
   } else {
     tensaoAnterior = 100;
+    Serial3.print("Tensao:");
+    Serial3.print(tensaoAnterior);
+    Serial3.print("V |");
+
+  }
+
+  if (tensaoMapeada <= 0) {
+    tensaoAnterior = 0;
     Serial3.print("Tensao:");
     Serial3.print(tensaoAnterior);
     Serial3.print("V |");
@@ -875,17 +1005,26 @@ void loop() {
     // Aplicar o filtro com margem de 3%
     if (correnteAnterior + (600 * FILTRO) < correnteMapeada || correnteAnterior - (600 * FILTRO) > correnteMapeada ) {
       correnteAnterior = correnteMapeada;
-    }
+    } 
+ 
     Serial3.print("Corrente:");
     Serial3.print(correnteAnterior);
     Serial3.println("A");
+
   } else {
     correnteAnterior = 600;
     Serial3.print("Corrente:");
     Serial3.print(correnteAnterior);
     Serial3.println("A");
   }
-  
-  // Envia os dados para o ESP8266 via comunicação serial
 
+  if (correnteMapeada <= 0) {
+    correnteAnterior = 0;
+    Serial3.print("Corrente:");
+    Serial3.print(correnteAnterior);
+    Serial3.println("A");
+  }
+
+  delay(20);
+  // Envia os dados para o ESP8266 via comunicação serial
 }

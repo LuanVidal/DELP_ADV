@@ -21,11 +21,15 @@ const char* PASSWORD = "3133331999";
 WiFiClient wifiClient;
 
 // ---------- BUFFER -------------
+
 #define BUFFER_SIZE 50
 char buffer[BUFFER_SIZE][200];
 int bufferIndex = 0;
 
-// ---------- CONEXÃO (SERVIDOR - BROKER - NTP)
+// ---------- CONEXÃO (SERVIDOR - BROKER - NTP) -----------
+
+unsigned long StartTime;
+
 String mac;
 const char* endpoint_host = "delp.tcsapp.com.br";
 const uint16_t endpoint_port = 443;
@@ -33,6 +37,7 @@ const uint16_t endpoint_port = 443;
 PubSubClient MQTT(wifiClient);
 
 //server ntp configuração
+
 const char* ntpServer = "pool.ntp.org";
 unsigned long epochTime; 
 
@@ -44,7 +49,7 @@ const int BROKER_PORT = 1883;
 bool conectBroker = false;
 bool conectWifi = false;
 
-#define ID_MQTT "BCI01"
+#define ID_MQTT "BCI1"
 #define TOPIC_PUBLISH "esp_client"
 
 // Declaração das Funções
@@ -52,6 +57,7 @@ void mantemConexoes();
 void conectaWiFi();
 void conectaMQTT();
 void enviaValores(float tensao, float corrente);
+
 
 void fazerRequisicaoHTTP(const char* host, uint16_t port, const char* uri, const char* requestBody) {
   
@@ -136,6 +142,14 @@ unsigned long getTime() {
   return now;
 }
 
+void getTimeComponents(unsigned long timestamp, int &hours, int &minutes, int &seconds) {
+  seconds = timestamp % 60; // Obtém os segundos
+  timestamp /= 60;
+  minutes = timestamp % 60; // Obtém os minutos
+  timestamp /= 60;
+  hours = timestamp % 24;   // Obtém as horas
+}
+
 void setup() {
   Serial.begin(115200);
   conectaWiFi();
@@ -160,8 +174,9 @@ void loop() {
       String correnteStr = mensagem.substring(posicaoInicio, posicaoFim);
       float corrente = correnteStr.toFloat();
 
+        enviaValores(tensao, corrente);
       // Enviar valores para o broker MQTT
-      enviaValores(tensao, corrente);
+
     }
 
     if (mensagem.startsWith("Acao:")) {
@@ -215,39 +230,44 @@ void loop() {
       if (acao == 4) // INICIO PROCESSO MÁQUINA
       {
         const char* endpoint = "/delp/arduino/inicioProcesso";
-        String requestBody = "{\"matricula\":\"" + matricula + "\",\"mac\":\"" + mac + "\",\"ordemProducao\":" + String(ordemProducao) + ",\"atividade\":" + String(atividade) + ",\"material\":" + String(material) + "}";
+        String requestBody = "{\"matricula\":\"" + matricula + "\",\"mac\":\"" + mac + "\",\"ordemProducao\":\"" + ordemProducao + "\",\"atividade\":\"" + atividade + "\",\"material\":\"" + material + "\"}";
+
         fazerRequisicaoHTTP(endpoint_host, endpoint_port, endpoint, requestBody.c_str());
+
+        StartTime = getTime();
+
+        int hours, minutes, seconds;
+        getTimeComponents(StartTime, hours, minutes, seconds);
+
+        String timeString = String(hours) + "-" + String(minutes) + "-" + String(seconds);
+        Serial.print(timeString);
       }
 
       if (acao == 5)  //TERMINO PROCESSO MÁQUINA
       {
         const char* endpoint = "/delp/arduino/terminoProcesso";
-        String requestBody = "{\"matricula\":\"" + matricula + "\",\"mac\":\"" + mac + "\",\"ordemProducao\":" + String(ordemProducao) + ",\"atividade\":" + String(atividade) + ",\"material\":" + String(material) + "}";
+        String requestBody = "{\"matricula\":\"" + matricula + "\",\"mac\":\"" + mac + "\",\"ordemProducao\":\"" + ordemProducao + "\",\"atividade\":\"" + atividade + "\",\"material\":\"" + material + "\"}";
         fazerRequisicaoHTTP(endpoint_host, endpoint_port, endpoint, requestBody.c_str());
+        
       }
 
-      if (acao == 6) //BUSCA ORDENS MÁQUINA
+      if (acao == 6) //PAUSA PROCESSO
       { 
-        const char* endpoint = "/delp/arduino/buscaOrdens";
+        const char* endpoint = "/delp/arduino/pausaProcesso";
         String requestBody = "{\"mac\":\"" + mac + "\"}";
         fazerRequisicaoHTTP(endpoint_host, endpoint_port, endpoint, requestBody.c_str());
       }
 
-      if (acao == 7) //BUSCA busca Atividades
+      if (acao == 7) //REINICIA PROCESSO
       { 
-        const char* endpoint = "/delp/arduino/buscaAtividades";
+        const char* endpoint = "/delp/arduino/reiniciaProcesso";
         String requestBody = "{\"mac\":\"" + mac + "\"}";
         fazerRequisicaoHTTP(endpoint_host, endpoint_port, endpoint, requestBody.c_str());
       }
       
-      if (acao == 8) //Busca Materiais
-      { 
-        const char* endpoint = "/delp/arduino/buscaMateriais";
-        String requestBody = "{\"mac\":\"" + mac + "\"}";
-        fazerRequisicaoHTTP(endpoint_host, endpoint_port, endpoint, requestBody.c_str());
-      }
     }
   }
+  delay(20);
 }
  
 void mantemConexoes() {
@@ -291,23 +311,27 @@ void conectaMQTT() {
     }
   }
 }
-
 /*
   Maquina 1: Corrente: 28 | Tensão: 29
   Maquina 2: Corrente: 31 | Tensão: 30
 */
 
 void enviaValores(float tensao, float corrente) {
+  
   unsigned long epochTime = getTime(); // 
   double epochTimeMs = epochTime + (millis() % 1000) / 1000.0; // Adicionando milissegundos ao timestamp
 
-  char mqttMessageTensao[200];
-  sprintf(mqttMessageTensao, "{\"id_variavel\": %d, \"valor\": %.2f, \"data_hora\": %.3f}", 30, tensao, epochTimeMs); // Usando %.3f para incluir milissegundos
+  char mqttMessageTensao[300];
+  sprintf(mqttMessageTensao, "{\"id_variavel\": %d, \"valor\": %.2f, \"data_hora\": %.3f}", 29, tensao, epochTimeMs); // Usando %.3f para incluir milissegundos
 
-  char mqttMessageCorrente[200];
-  sprintf(mqttMessageCorrente, "{\"id_variavel\": %d, \"valor\": %.2f, \"data_hora\": %.3f}", 31, corrente, epochTimeMs); // Usando %.3f para incluir milissegundos
+  char mqttMessageCorrente[300];
+  sprintf(mqttMessageCorrente, "{\"id_variavel\": %d, \"valor\": %.2f, \"data_hora\": %.3f}", 28, corrente, epochTimeMs); // Usando %.3f para incluir milissegundos
+
+  //Serial.println(mqttMessageCorrente); | DEBUG DOS VALORES ENVIADOS PARA O SERVIDOR |  
 
   MQTT.publish(TOPIC_PUBLISH, mqttMessageTensao);
   MQTT.publish(TOPIC_PUBLISH, mqttMessageCorrente);
+
   delay(200);
+
 }
