@@ -42,8 +42,6 @@ const char* ntpServer = "pool.ntp.org";
 unsigned long epochTime; 
 
 const char* BROKER_MQTT = "54.235.29.216";
-const char* mqttUser = "Vn1zj0dwxiX9CmBM";
-const char* mqttPassword = "ld39C62kLj0Jv9VIxsmdnm257i45pP6H";
 const int BROKER_PORT = 1883;
 
 bool conectBroker = false;
@@ -51,13 +49,13 @@ bool conectWifi = false;
 
 #define ID_MQTT "BCI1"
 #define TOPIC_PUBLISH "esp_client"
+#define TOPIC_LOG "topic_log"
 
 // Declaração das Funções
 void mantemConexoes();
 void conectaWiFi();
 void conectaMQTT();
-void enviaValores(float tensao, float corrente);
-
+void enviaValores(float tensao, float corrente, String msgTensão, String msgCorrente, String msgCompleta);
 
 void fazerRequisicaoHTTP(const char* host, uint16_t port, const char* uri, const char* requestBody) {
   
@@ -174,7 +172,7 @@ void loop() {
       String correnteStr = mensagem.substring(posicaoInicio, posicaoFim);
       float corrente = correnteStr.toFloat();
 
-        enviaValores(tensao, corrente);
+      enviaValores(tensao, corrente, tensaoStr, correnteStr, mensagem);
       // Enviar valores para o broker MQTT
 
     }
@@ -316,22 +314,24 @@ void conectaMQTT() {
   Maquina 2: Corrente: 31 | Tensão: 30
 */
 
-void enviaValores(float tensao, float corrente) {
+void enviaValores(float tensao, float corrente, String msgTensão, String msgCorrente, String mensagem) {
   
   unsigned long epochTime = getTime(); // 
   double epochTimeMs = epochTime + (millis() % 1000) / 1000.0; // Adicionando milissegundos ao timestamp
 
   char mqttMessageTensao[300];
-  sprintf(mqttMessageTensao, "{\"id_variavel\": %d, \"valor\": %.2f, \"data_hora\": %.3f}", 29, tensao, epochTimeMs); // Usando %.3f para incluir milissegundos
+  sprintf(mqttMessageTensao, "{\"id_variavel\": %d, \"valor\": %.2f, \"data_hora\": %.3f}", 30, tensao, epochTimeMs); // Usando %.3f para incluir milissegundos
 
   char mqttMessageCorrente[300];
-  sprintf(mqttMessageCorrente, "{\"id_variavel\": %d, \"valor\": %.2f, \"data_hora\": %.3f}", 28, corrente, epochTimeMs); // Usando %.3f para incluir milissegundos
+  sprintf(mqttMessageCorrente, "{\"id_variavel\": %d, \"valor\": %.2f, \"data_hora\": %.3f}", 31, corrente, epochTimeMs); // Usando %.3f para incluir milissegundos
 
-  //Serial.println(mqttMessageCorrente); | DEBUG DOS VALORES ENVIADOS PARA O SERVIDOR |  
+  char mqttMenstagemDebug[300];
+  sprintf(mqttMenstagemDebug, "| LOGS | STRING ARDUINO-ESP: TENSAO [%s] | CORRENTE: [%s] | MAQUINA: [%d] | TEMPO: %.3f || MENSAGEM COMPLETA: %s", msgTensão.c_str(), msgCorrente.c_str(), 2, epochTimeMs, mensagem.c_str());
 
+  MQTT.publish(TOPIC_LOG, mqttMenstagemDebug);
   MQTT.publish(TOPIC_PUBLISH, mqttMessageTensao);
   MQTT.publish(TOPIC_PUBLISH, mqttMessageCorrente);
-
+  
   delay(200);
 
 }

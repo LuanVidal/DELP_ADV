@@ -11,7 +11,6 @@ static unsigned long debounceDelay = 100;
 #define FILTRO 0.03 // TAXA DE VARIAÇÃO
 float tensaoAnterior = 0.0;
 float correnteAnterior = 0.0;
-String message;
 
 String mensagemDeErroRecebida = "";
 float correnteMapeada = 0.0;
@@ -22,8 +21,6 @@ bool aproved = false;
 bool timeout = false;
 bool pausa = false;
 bool restart = false;
-bool erro_pause = false;
-bool erro_reinico = false;
 
 const byte LINHAS = 4; // Número de linhas do teclado matricial
 const byte COLUNAS = 4; // Número de colunas do teclado matricial
@@ -275,11 +272,12 @@ void loop() {
         // Avança para a tela de matrícula
 
         beep();
-
-        mensagemDeErroRecebida = "Sem erro";
         acaoString = "1" ;//status
         enviaValores();
 
+
+        mensagemDeErroRecebida = "Sem erro";
+        
         telaAtual = TELA_MATRICULA;
 
         escreveTela(MATRICULA, 000); // Zera o valor da matrícula
@@ -545,45 +543,32 @@ void loop() {
       beep();
       exibirTela(15);
 
-      if(erro_pause){
-        delay(3000);
-        telaAtual = TELA_RASTREABILIDADE2;
-        erro_pause = false;
+      mensagemDeErroRecebida = "";
+
+      matricula = 0;
+      ordemProducao = 0; // Zera o valor da ordem de produção principal
+      ordemProducao_P2 = 0; // Zera o valor da ordem de produção adicional
+      atividade = 0;
+      material = 0;
+
+      aproved = false;
+
+      ordemProducaoCompleta = "";
+      matriculaCompleta = "";
+
+      delay(3000);
+
+      matricula = 0;
+      matricula_P2 = 0;
+      escreveTela(MATRICULA, 000);
+      escreveTela(MATRICULA_P2, 000);
+
+      for (int i = 4; i >= 0; i--) {
+        aux_matricula[i]=0; 
       }
 
-      if(erro_reinico){
-        delay(3000);
-        telaAtual = TELA_RASTREABILIDADE3;
-        erro_reinico = false;
-
-      } else {
-        mensagemDeErroRecebida = "";
-
-        matricula = 0;
-        ordemProducao = 0; // Zera o valor da ordem de produção principal
-        ordemProducao_P2 = 0; // Zera o valor da ordem de produção adicional
-        atividade = 0;
-        material = 0;
-
-        aproved = false;
-
-        ordemProducaoCompleta = "";
-        matriculaCompleta = "";
-
-        delay(3000);
-
-        matricula = 0;
-        matricula_P2 = 0;
-        escreveTela(MATRICULA, 000);
-        escreveTela(MATRICULA_P2, 000);
-
-        for (int i = 4; i >= 0; i--) {
-          aux_matricula[i]=0; 
-        }
-
-        telaAtual = TELA_MATRICULA;
-        beep();
-      }
+      telaAtual = TELA_MATRICULA;
+      beep();
       break;
 
     case ERRO_TELA_MATRICULA:
@@ -793,14 +778,7 @@ void loop() {
         acaoString = "6";
         enviaValores();
 
-        if(message.indexOf("Requisicao bem sucedida:") != -1){
-          telaAtual = TELA_RASTREABILIDADE3;
-        }
-
-        if (message.indexOf("Erro de timeout na requisicao HTTP.") != -1) {
-          telaAtual = ERRO_TIMEOUT;
-          erro_pause = true;
-        }
+        telaAtual = TELA_RASTREABILIDADE3;
 
       } else if (tecla == '*') {
 
@@ -840,15 +818,8 @@ void loop() {
         acaoString = "7";
         enviaValores();
 
-        if(message.indexOf("Requisicao bem sucedida:") != -1){
-          telaAtual = telaAtual = TELA_RASTREABILIDADE2;;
-        }
-
-        if (message.indexOf("Erro de timeout na requisicao HTTP.") != -1) {
-          telaAtual = ERRO_TIMEOUT;
-          erro_reinico = true;
-        }
-        
+        telaAtual = TELA_RASTREABILIDADE2;
+         
       } else if (tecla == '*') {
       }
       break;
@@ -905,7 +876,7 @@ void loop() {
   // recebimento de dados -----------------------------------------------------------
 
   if (Serial3.available()) {
-    message = Serial3.readStringUntil('\n');
+    String message = Serial3.readStringUntil('\n');
       Serial.println(message); // Print para fins de depuração
       
       if (message.startsWith("{\"error\":\"")) {
@@ -971,34 +942,25 @@ void loop() {
 
   // envio de dados ----------------------------------------------------------------------
 
-  float tensao = analogRead(A1);
+  float tensao = analogRead(A0);
   float corrente = analogRead(A1);
 
   tensaoMapeada =  tensao * 0.0977517106549365; // 0 a 100 - 0.0488758553274682
   correnteMapeada = corrente * 0.5865102639296188; // 0 a 600 - 0.2932551319648094
+
   
   if (tensaoMapeada <= 100) {
     // Aplicar o filtro com margem de 3%
     if (tensaoAnterior + (100 * FILTRO) < tensaoMapeada || tensaoAnterior - (100 * FILTRO) > tensaoMapeada ) {
       tensaoAnterior = tensaoMapeada;
     }
-    Serial3.print("Tensao:");
-    Serial3.print(tensaoAnterior);
-    Serial3.print("V |");
 
   } else {
     tensaoAnterior = 100;
-    Serial3.print("Tensao:");
-    Serial3.print(tensaoAnterior);
-    Serial3.print("V |");
-
   }
 
   if (tensaoMapeada <= 0) {
     tensaoAnterior = 0;
-    Serial3.print("Tensao:");
-    Serial3.print(tensaoAnterior);
-    Serial3.print("V |");
   }
 
   if (correnteMapeada <= 600) {
@@ -1006,25 +968,28 @@ void loop() {
     if (correnteAnterior + (600 * FILTRO) < correnteMapeada || correnteAnterior - (600 * FILTRO) > correnteMapeada ) {
       correnteAnterior = correnteMapeada;
     } 
- 
-    Serial3.print("Corrente:");
-    Serial3.print(correnteAnterior);
-    Serial3.println("A");
-
   } else {
     correnteAnterior = 600;
-    Serial3.print("Corrente:");
-    Serial3.print(correnteAnterior);
-    Serial3.println("A");
   }
 
   if (correnteMapeada <= 0) {
     correnteAnterior = 0;
-    Serial3.print("Corrente:");
-    Serial3.print(correnteAnterior);
-    Serial3.println("A");
   }
 
-  delay(20);
+  Serial3.print("Tensao:");
+  Serial3.print(tensaoAnterior, 2);
+  Serial3.print("V |");
+  Serial3.print("Corrente:");
+  Serial3.print(correnteAnterior, 2);
+  Serial3.println("A");
+
+  /*Serial.print("Tensao:");
+  Serial.print(tensaoAnterior);
+  Serial.print(" V |");
+  Serial.print("Corrente:");
+  Serial.print(correnteAnterior);
+  Serial.println("A");*/
+
+  delay(200);
   // Envia os dados para o ESP8266 via comunicação serial
 }
